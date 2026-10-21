@@ -96,4 +96,95 @@ for (int i = 0; i <= monsterCount; i++)
 for (int i = 0; i < monsterCount; i++)
 ```
 
+# 5. Arithmetic
 
+Signed/unsigned mixing, integer division, division by zero and unchecked results.
+
+| Line number | Defect type | Why it is a problem | Proposed solution | Severity |
+|---|---|---|---|---|
+| 55, 56 | Arithmetic | unsigned int dmg = damage is a signed-to-unsigned conversion and m->health - dmg is unsigned. < 0 is always false, so the guard never works, and a negative damage becomes a huge number. | Keep damage as int, reject damage < 0, and test if (m->health < damage). | High |
+| 58 | Arithmetic | Because the check on line 56 never triggers, health can go negative. | Clamp: m->health = std::max(0, m->health - damage); | Medium |
+| 80 | Arithmetic | If monsterCount == 0 this divides by zero. It also silently converts double to int. | Add if (monsterCount == 0) return 0; and use static_cast<int>(...), or return double. | Medium |
+| 91 | Arithmetic | attack * armorPercent / 100 is integer division, so the fraction is lost before conversion to double. It can also overflow int. The formula also adds armor to the damage rather than reducing it. | Use attack * (100 - armorPercent) / 100.0. | Medium |
+
+## Example (line 91)
+
+cpp
+// Before
+return attack * armorPercent / 100;
+
+// After
+return attack * (100 - armorPercent) / 100.0;
+
+
+
+===== FILE: 06-control-flow.md =====
+# 6. Control Flow
+
+Wrong conditions and paths that do not return a value.
+
+| Line number | Defect type | Why it is a problem | Proposed solution | Severity |
+|---|---|---|---|---|
+| 47 | Control flow | = is used instead of ==. This overwrites every monster's id and is true for any non-zero id, so the first monster is always returned. | Change to if (monsters[i]->id == id). | High |
+| 94-98 | Control flow | playerRank has no return when score <= 100, which is undefined behavior. playerRank(50) on line 126 hits this case. | Add a final return 3; (or else return 3;). | High |
+
+## Example (line 47)
+
+cpp
+// Before
+if (monsters[i]->id = id)
+
+// After
+if (monsters[i]->id == id)
+
+
+
+===== FILE: 07-function-call.md =====
+# 7. Function Call
+
+Problems with how functions return values or receive arguments.
+
+| Line number | Defect type | Why it is a problem | Proposed solution | Severity |
+|---|---|---|---|---|
+| 70-73 | Function call | getMonsterLabel returns a reference (std::string&) to the local variable label, which is destroyed on return, so the reference dangles. Line 72 also dereferences m without a null check. | Return std::string by value and add a null check. | High |
+| 17, 40 | Function call | std::string is passed by value in the Monster constructor and spawnMonster, causing unnecessary copies. | Use const std::string&. | Low |
+
+## Example (lines 70-73)
+
+cpp
+// Before
+std::string& getMonsterLabel(int id) {
+    Monster* m = findMonster(id);
+    std::string label = "Monster-" + std::to_string(m->id) + ":" + m->name;
+    return label;               // reference to a local
+}
+
+// After
+std::string getMonsterLabel(int id) {
+    Monster* m = findMonster(id);
+    if (m == nullptr) return "Unknown";
+    return "Monster-" + std::to_string(m->id) + ":" + m->name;
+}
+
+
+
+===== FILE: 08-classes.md =====
+# 8. Classes
+
+Ownership and copying problems in Game and Monster.
+
+| Line number | Defect type | Why it is a problem | Proposed solution | Severity |
+|---|---|---|---|---|
+| 85 | Classes | The deleted pointer stays in monsters[] and monsterCount is not reduced. The destructor will delete it again (double free) and later lookups use a dangling pointer. | Remove the entry (shift the array down) and decrement monsterCount, or set the slot to nullptr. | High |
+| 129 | Classes | Game copy = game; makes a shallow copy of the raw pointer array. Game has no copy constructor or copy assignment operator (Rule of Three), so both objects delete the same monsters (double free). | Delete the copy operations (Game(const Game&) = delete;), write deep-copy ones, or use unique_ptr. | High |
+| 10-22 | Classes | Monster fields are public and the constructor assigns members in its body instead of the initializer list. | Make fields private with accessors and use an initializer list. | Low |
+
+## Example (line 129)
+
+cpp
+// Before
+Game copy = game;               // shallow copy -> double free
+
+// After (in class Game)
+Game(const Game&) = delete;
+Game& operator=(const Game&) = delete;
