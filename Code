@@ -1,1 +1,99 @@
+=====initialization.md =====
+# 1. Initialization
+
+Variables and arrays that are used before they are given a value.
+
+| Line number | Defect type | Why it is a problem | Proposed solution | Severity |
+|---|---|---|---|---|
+| 32 | Initialization | The `monsters[]` array is never initialized, so its slots hold garbage pointers. | Initialize with `monsters[MAX_MONSTERS] = {nullptr}` or a loop that sets each slot to `nullptr`. | Low |
+| 77-79 | Initialization | `double sum;` is uninitialized, so `+=` adds to garbage. | Write `double sum = 0.0;` | High |
+| 103, 106 | Initialization | `health` is uninitialized. If `cin` fails, garbage is passed to `spawnMonster`. | Write `int health = 0;` and check `if (!(std::cin >> health))`. | Medium |
+
+## Example (line 77)
+
+```cpp
+// Before
+double sum;
+for (int i = 0; i < monsterCount; i++)
+    sum += monsters[i]->attack;
+
+// After
+double sum = 0.0;
+for (int i = 0; i < monsterCount; i++)
+    sum += monsters[i]->attack;
+```
+
+
+=====pointers.md =====
+# 2. Pointers (null / delete)
+
+Null dereferences, use-after-free, wrong `delete` form and memory leaks.
+
+| Line number | Defect type | Why it is a problem | Proposed solution | Severity |
+|---|---|---|---|---|
+| 54, 56 | Pointers (null) | `findMonster` can return `nullptr` (e.g. id 99 at line 121), but `m->health` is used without a null check. | Add `if (m == nullptr) return -1;` (or throw an exception). | High |
+| 84-86 | Pointers (delete) | `m` is not checked for null. After `delete m` the code still reads `m->name` (use-after-free). | Print the name before deleting and check `m != nullptr`. | High |
+| 109 | Pointers (delete) | `delete name` is used on memory from `new char[10]`. This `new[]` / `delete` mismatch is undefined behavior. | Use `delete[] name`, or avoid it by using `std::string`. | High |
+| 120 | Pointers (leak) | `bonus` is allocated with `new` and never freed (memory leak). It is also unused. | Remove it, or `delete bonus;` (or use a smart pointer). | Medium |
+
+## Example (lines 84-86)
+
+```cpp
+// Before
+Monster* m = findMonster(id);
+delete m;
+std::cout << "Defeated " << m->name << "\n";   // use after free
+
+// After
+Monster* m = findMonster(id);
+if (m == nullptr) return;
+std::cout << "Defeated " << m->name << "\n";
+delete m;
+```
+
+
+=====arrays-buffers.md =====
+# 3. Arrays / Buffers
+
+Writes and reads past the end of fixed-size storage.
+
+| Line number | Defect type | Why it is a problem | Proposed solution | Severity |
+|---|---|---|---|---|
+| 41 | Arrays/buffers | `spawnMonster` has no bounds check. `main` spawns 6 monsters (line 119) and `readBoss` spawns a 7th, but the array holds only 5, so it writes out of bounds. | Check `monsterCount < MAX_MONSTERS` before inserting and return false on failure. Better: use `std::vector<std::unique_ptr<Monster>>`. | High |
+| 102, 105 | Arrays/buffers | `std::cin >> name` into a 10-char buffer has no length limit, so a name of 10 or more characters overflows it. | Use `std::string name; std::cin >> name;` | High |
+| 119 | Arrays/buffers | The 6th `spawnMonster` call exceeds `MAX_MONSTERS = 5`. | Raise the limit or handle the failure returned by the bounds check at line 41. | High |
+
+## Example (line 41)
+
+```cpp
+// Before
+monsters[monsterCount] = new Monster(id, name, health, attack);
+monsterCount++;
+
+// After
+if (monsterCount >= MAX_MONSTERS) return;   // bounds check
+monsters[monsterCount] = new Monster(id, name, health, attack);
+monsterCount++;
+```
+
+
+===== loops.md =====
+# 4. Loops
+
+Wrong loop bounds.
+
+| Line number | Defect type | Why it is a problem | Proposed solution | Severity |
+|---|---|---|---|---|
+| 64 | Loops | The loop uses `i <= monsterCount` (off by one). It reads `monsters[monsterCount]`, an uninitialized slot, and dereferences it. | Change to `i < monsterCount`. | High |
+
+## Example (line 64)
+
+```cpp
+// Before
+for (int i = 0; i <= monsterCount; i++)
+
+// After
+for (int i = 0; i < monsterCount; i++)
+```
+
 
